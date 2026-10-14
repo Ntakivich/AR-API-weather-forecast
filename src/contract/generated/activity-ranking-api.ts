@@ -55,10 +55,13 @@ export interface paths {
      * Rank Skiing, Surfing, Outdoor Sightseeing and Indoor Sightseeing for each of the next 7 days.
      * @description Provide **exactly one** of `city` or `locationId`.
      *
-     *     - `city` must resolve to a single place. When several places share the name
-     *       (e.g. London, GB and London, CA) or the name is only a partial match, the API
-     *       responds `409` with the candidates so the front end can ask the user to choose,
-     *       then call again with `locationId`.
+     *     - `city` resolves to the most relevant place whose name matches exactly (case- and
+     *       diacritic-insensitive), as ordered by Open-Meteo (largest population first). Most names
+     *       exist in several countries (Paris FR / Paris US-TX), so the response lists the other
+     *       same-named places in `alternativeMatches` and the front end can offer
+     *       "Not this Paris?" followed by a call with `locationId`.
+     *     - When no place matches the name exactly, the API responds `404` with prefix-matched
+     *       `suggestions` so the front end can offer "Did you mean Chamonix?".
      *     - `locationId` is the `id` returned by `/v1/locations` and is never ambiguous.
      *
      *     Within each day the four activities are ordered by `rank` (1 = most suitable).
@@ -142,6 +145,8 @@ export interface components {
     };
     ActivityRankingReport: {
       location: components['schemas']['Location'];
+      /** @description Other places sharing the requested city name (empty when requested by locationId). */
+      alternativeMatches: components['schemas']['Location'][];
       units: components['schemas']['MeasurementUnits'];
       /** @description 7 consecutive days starting today in the location's time zone. */
       days: components['schemas']['DailyActivityRanking'][];
@@ -152,7 +157,6 @@ export interface components {
       type:
         | '/problems/invalid-request'
         | '/problems/location-not-found'
-        | '/problems/ambiguous-location'
         | '/problems/weather-provider-unavailable'
         | '/problems/weather-provider-timeout';
       title: string;
@@ -166,8 +170,9 @@ export interface components {
         reason: string;
       }[];
     };
-    AmbiguousLocationProblem: components['schemas']['Problem'] & {
-      candidates: components['schemas']['Location'][];
+    LocationNotFoundProblem: components['schemas']['Problem'] & {
+      /** @description Places whose name starts with the requested name; empty when there are none. */
+      suggestions: components['schemas']['Location'][];
     };
   };
   responses: {
@@ -180,22 +185,13 @@ export interface components {
         'application/problem+json': components['schemas']['InvalidRequestProblem'];
       };
     };
-    /** @description No city or town matches the given name or identifier. */
+    /** @description No city or town matches the given name exactly, or the identifier is unknown. */
     LocationNotFound: {
       headers: {
         [name: string]: unknown;
       };
       content: {
-        'application/problem+json': components['schemas']['Problem'];
-      };
-    };
-    /** @description The city name does not identify a single place; the user must pick a candidate. */
-    AmbiguousLocation: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        'application/problem+json': components['schemas']['AmbiguousLocationProblem'];
+        'application/problem+json': components['schemas']['LocationNotFoundProblem'];
       };
     };
     /** @description Open-Meteo returned an error or an unreadable response. */
@@ -306,7 +302,6 @@ export interface operations {
       };
       400: components['responses']['InvalidRequest'];
       404: components['responses']['LocationNotFound'];
-      409: components['responses']['AmbiguousLocation'];
       502: components['responses']['WeatherProviderUnavailable'];
       504: components['responses']['WeatherProviderTimeout'];
     };

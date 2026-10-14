@@ -42,6 +42,8 @@ export default tseslint.config(
       '@typescript-eslint/consistent-type-imports': 'error',
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
       'no-console': ['error', { allow: ['warn', 'error'] }],
+      // Playwright fixtures must destructure their first argument even when they use no fixtures.
+      'no-empty-pattern': ['error', { allowObjectPatternsAsParameters: true }],
     },
   },
   {

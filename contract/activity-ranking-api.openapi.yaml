@@ -82,10 +82,13 @@ paths:
       description: |
         Provide **exactly one** of `city` or `locationId`.
 
-        - `city` must resolve to a single place. When several places share the name
-          (e.g. London, GB and London, CA) or the name is only a partial match, the API
-          responds `409` with the candidates so the front end can ask the user to choose,
-          then call again with `locationId`.
+        - `city` resolves to the most relevant place whose name matches exactly (case- and
+          diacritic-insensitive), as ordered by Open-Meteo (largest population first). Most names
+          exist in several countries (Paris FR / Paris US-TX), so the response lists the other
+          same-named places in `alternativeMatches` and the front end can offer
+          "Not this Paris?" followed by a call with `locationId`.
+        - When no place matches the name exactly, the API responds `404` with prefix-matched
+          `suggestions` so the front end can offer "Did you mean Chamonix?".
         - `locationId` is the `id` returned by `/v1/locations` and is never ambiguous.
 
         Within each day the four activities are ordered by `rank` (1 = most suitable).
@@ -103,8 +106,6 @@ paths:
           $ref: '#/components/responses/InvalidRequest'
         '404':
           $ref: '#/components/responses/LocationNotFound'
-        '409':
-          $ref: '#/components/responses/AmbiguousLocation'
         '502':
           $ref: '#/components/responses/WeatherProviderUnavailable'
         '504':
@@ -162,17 +163,11 @@ components:
           schema:
             $ref: '#/components/schemas/InvalidRequestProblem'
     LocationNotFound:
-      description: No city or town matches the given name or identifier.
+      description: No city or town matches the given name exactly, or the identifier is unknown.
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/Problem'
-    AmbiguousLocation:
-      description: The city name does not identify a single place; the user must pick a candidate.
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/AmbiguousLocationProblem'
+            $ref: '#/components/schemas/LocationNotFoundProblem'
     WeatherProviderUnavailable:
       description: Open-Meteo returned an error or an unreadable response.
       content:
@@ -324,11 +319,17 @@ components:
 
     ActivityRankingReport:
       type: object
-      required: [location, units, days]
+      required: [location, alternativeMatches, units, days]
       additionalProperties: false
       properties:
         location:
           $ref: '#/components/schemas/Location'
+        alternativeMatches:
+          type: array
+          maxItems: 20
+          description: Other places sharing the requested city name (empty when requested by locationId).
+          items:
+            $ref: '#/components/schemas/Location'
         units:
           $ref: '#/components/schemas/MeasurementUnits'
         days:
@@ -349,7 +350,6 @@ components:
           enum:
             - /problems/invalid-request
             - /problems/location-not-found
-            - /problems/ambiguous-location
             - /problems/weather-provider-unavailable
             - /problems/weather-provider-timeout
         title:
@@ -379,14 +379,15 @@ components:
                   reason:
                     type: string
 
-    AmbiguousLocationProblem:
+    LocationNotFoundProblem:
       allOf:
         - $ref: '#/components/schemas/Problem'
         - type: object
-          required: [candidates]
+          required: [suggestions]
           properties:
-            candidates:
+            suggestions:
               type: array
-              minItems: 1
+              maxItems: 20
+              description: Places whose name starts with the requested name; empty when there are none.
               items:
                 $ref: '#/components/schemas/Location'

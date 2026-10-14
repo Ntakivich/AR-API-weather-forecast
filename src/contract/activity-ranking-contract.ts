@@ -17,7 +17,7 @@ export type DailyActivityRanking = ContractSchemas['DailyActivityRanking'];
 export type ActivityRankingReport = ContractSchemas['ActivityRankingReport'];
 export type ProblemDetails = ContractSchemas['Problem'];
 export type ProblemType = ProblemDetails['type'];
-export type AmbiguousLocationProblem = ContractSchemas['AmbiguousLocationProblem'];
+export type LocationNotFoundProblem = ContractSchemas['LocationNotFoundProblem'];
 export type InvalidRequestProblem = ContractSchemas['InvalidRequestProblem'];
 
 export const API_ENDPOINTS = {
@@ -68,7 +68,6 @@ export const SUITABILITY_RATING_BANDS: readonly SuitabilityRatingBand[] = [
 export const PROBLEM_TYPES = {
   invalidRequest: '/problems/invalid-request',
   locationNotFound: '/problems/location-not-found',
-  ambiguousLocation: '/problems/ambiguous-location',
   weatherProviderUnavailable: '/problems/weather-provider-unavailable',
   weatherProviderTimeout: '/problems/weather-provider-timeout',
 } as const satisfies Record<string, ProblemType>;

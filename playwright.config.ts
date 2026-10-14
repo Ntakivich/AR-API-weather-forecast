@@ -2,7 +2,6 @@ import { defineConfig } from '@playwright/test';
 import { defineBddConfig } from 'playwright-bdd';
 
 import { testEnvironment } from './src/config/test-environment';
-import { FAILURE_CATEGORIES } from './src/reporting/failure-categories';
 
 const LIVE_WEATHER_PROVIDER_TAG = /@live-weather-provider/;
 const SCENARIO_TIMEOUT_MILLISECONDS = 30_000;
@@ -34,7 +33,6 @@ export default defineConfig({
         resultsDir: 'allure-results',
         detail: true,
         suiteTitle: false,
-        categories: FAILURE_CATEGORIES,
         environmentInfo: {
           'Activity Ranking API': testEnvironment.apiBaseUrl,
           'Weather provider stub (WireMock)': testEnvironment.weatherProviderStubUrl,

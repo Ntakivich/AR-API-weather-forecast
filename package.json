@@ -11,7 +11,7 @@
     "bddgen": "bddgen",
     "test": "bddgen && playwright test --project=acceptance",
     "test:smoke": "bddgen && playwright test --project=acceptance --grep @smoke",
-    "test:live": "bddgen && playwright test --project=live-weather-provider",
+    "test:live": "tsx scripts/clear-allure-results.ts && bddgen && playwright test --project=live-weather-provider",
     "test:docker": "docker compose up --build --abort-on-container-exit --exit-code-from acceptance-tests",
     "stubs:start": "docker compose up --detach weather-provider-stub",
     "stubs:stop": "docker compose down",
@@ -22,9 +22,12 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "verify": "npm run typecheck && npm run lint && npm run format:check && npm run contract:lint && bddgen",
-    "report:allure": "allure generate allure-results --output allure-report",
+    "report:allure": "allure generate allure-results",
     "report:allure:open": "allure open allure-report",
-    "pairwise:generate": "tsx scripts/generate-pairwise-weather-days.ts"
+    "pairwise:generate": "tsx scripts/generate-pairwise-weather-days.ts",
+    "test:in-container": "tsx scripts/wait-for-weather-provider-stub.ts && npm test",
+    "pretest": "tsx scripts/clear-allure-results.ts",
+    "report:summary": "tsx scripts/summarise-acceptance-results.ts"
   },
   "devDependencies": {
     "@cucumber/gherkin": "39.1.0",

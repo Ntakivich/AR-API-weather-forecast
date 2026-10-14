@@ -103,13 +103,15 @@ function printGherkinWeeks(rows: Row[]): void {
 
   const weekCount = Math.ceil(rows.length / DAYS_PER_WEEK);
   for (let week = 0; week < weekCount; week += 1) {
-    console.warn(`\n    # Pairwise week ${week + 1} of ${weekCount}`);
-    console.warn(formatLine(header));
+    process.stdout.write(`\n    # Pairwise week ${week + 1} of ${weekCount}\n`);
+    process.stdout.write(`${formatLine(header)}\n`);
     rows.slice(week * DAYS_PER_WEEK, (week + 1) * DAYS_PER_WEEK).forEach((row, dayIndex) => {
-      console.warn(formatLine([String(dayIndex + 1), ...factors.map((factor) => row.get(factor) ?? '')]));
+      process.stdout.write(
+        `${formatLine([String(dayIndex + 1), ...factors.map((factor) => row.get(factor) ?? '')])}\n`,
+      );
     });
   }
-  console.warn(`\n${rows.length} days cover all ${allPairs().size} factor-level pairs.`);
+  process.stdout.write(`\n${rows.length} days cover all ${allPairs().size} factor-level pairs.\n`);
 }
 
 printGherkinWeeks(generatePairwiseRows());

@@ -1,0 +1,132 @@
+name: Acceptance suite
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      live-weather-provider:
+        description: Also check the WireMock stub against the live Open-Meteo API
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-checks:
+    name: Types, lint, formatting, contract and step bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+
+  acceptance:
+    name: Acceptance specification
+    needs: static-checks
+    runs-on: ubuntu-latest
+    env:
+      PUBLISHED_REPORT_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+
+      # Spec-first: the service does not exist yet, so a red suite is the expected outcome.
+      # Set the repository variable ACCEPTANCE_SUITE_BLOCKS_BUILD=true once the service is plugged in.
+      - name: Run the suite against the WireMock weather provider stub
+        id: suite
+        continue-on-error: ${{ vars.ACCEPTANCE_SUITE_BLOCKS_BUILD != 'true' }}
+        run: npm run test:docker
+
+      - name: Restore report history from the published report
+        if: always()
+        run: |
+          mkdir -p allure-history
+          curl --fail --silent --show-error --location \
+            "$PUBLISHED_REPORT_URL/history/history.jsonl" --output allure-history/history.jsonl \
+            || echo "No published history yet; starting a new one."
+
+      - name: Build the Allure report
+        if: always()
+        run: |
+          npm run report:allure
+          mkdir -p allure-report/history
+          cp allure-history/history.jsonl allure-report/history/ 2>/dev/null || true
+
+      - name: Summarise results
+        if: always()
+        run: npm run --silent report:summary >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Flag the expected red state
+        if: steps.suite.outcome == 'failure'
+        run: >
+          echo "::warning title=Spec-first suite is red::Scenarios fail because the Activity Ranking API
+          is not implemented yet. See the job summary and the Allure report for what each scenario expects."
+
+      - name: Upload the Allure and Playwright reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: acceptance-reports
+          path: |
+            allure-report
+            playwright-report
+          retention-days: 14
+
+      - name: Prepare the Allure report for GitHub Pages
+        if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: allure-report
+
+  publish-report:
+    name: Publish the Allure report to GitHub Pages
+    needs: acceptance
+    if: always() && needs.acceptance.result == 'success' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
+
+  live-weather-provider:
+    name: Stub fidelity against live Open-Meteo
+    needs: static-checks
+    if: github.event_name == 'workflow_dispatch' && inputs.live-weather-provider
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run test:live
+      - name: Upload the live check results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: live-weather-provider-results
+          path: |
+            allure-results
+            playwright-report
+          retention-days: 14

@@ -6,3 +6,4 @@ allure-results/
 allure-report/
 .env
 .DS_Store
+allure-history/

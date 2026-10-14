@@ -52,19 +52,6 @@ export const SUITABILITY_SCORE_RANGE = {
   highest: 100,
 } as const;
 
-export interface SuitabilityRatingBand {
-  rating: Exclude<SuitabilityRating, 'UNAVAILABLE'>;
-  lowestScore: number;
-  highestScore: number;
-}
-
-export const SUITABILITY_RATING_BANDS: readonly SuitabilityRatingBand[] = [
-  { rating: 'POOR', lowestScore: 0, highestScore: 24 },
-  { rating: 'FAIR', lowestScore: 25, highestScore: 49 },
-  { rating: 'GOOD', lowestScore: 50, highestScore: 74 },
-  { rating: 'EXCELLENT', lowestScore: 75, highestScore: 100 },
-];
-
 export const PROBLEM_TYPES = {
   invalidRequest: '/problems/invalid-request',
   locationNotFound: '/problems/location-not-found',

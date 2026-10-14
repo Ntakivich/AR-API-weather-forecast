@@ -42,6 +42,11 @@ export const FAILURE_CATEGORIES: Category[] = [
     matchedStatuses: UNSUCCESSFUL_STATUSES,
   },
   {
+    name: 'Location resolution differs from the specification',
+    messageRegex: messageContaining('Location resolution differs from the specification'),
+    matchedStatuses: UNSUCCESSFUL_STATUSES,
+  },
+  {
     name: 'Weather provider integration',
     messageRegex: messageContaining('Weather provider integration'),
     matchedStatuses: UNSUCCESSFUL_STATUSES,

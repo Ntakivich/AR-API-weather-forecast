@@ -2,6 +2,7 @@ import * as allure from 'allure-js-commons';
 import { createBdd, test as bddTest } from 'playwright-bdd';
 
 import { ActivityRankingApiClient } from '../clients/activity-ranking-api-client';
+import { LiveOpenMeteoClient } from '../clients/live-open-meteo-client';
 import { testEnvironment } from '../config/test-environment';
 import { documentScenarioInReport } from '../reporting/scenario-documentation';
 import { WeatherProviderStub } from '../stubs/weather-provider/weather-provider-stub';
@@ -15,6 +16,7 @@ interface ScenarioFixtures {
   scenario: ScenarioContext;
   activityRankingApi: ActivityRankingApiClient;
   weatherProvider: WeatherProviderStub;
+  liveWeatherProvider: LiveOpenMeteoClient;
 }
 
 export const test = bddTest.extend<ScenarioFixtures>({
@@ -26,6 +28,9 @@ export const test = bddTest.extend<ScenarioFixtures>({
   },
   weatherProvider: async ({}, use) => {
     await use(new WeatherProviderStub(new WireMockAdminClient(testEnvironment.weatherProviderStubUrl)));
+  },
+  liveWeatherProvider: async ({}, use) => {
+    await use(new LiveOpenMeteoClient());
   },
 });
 

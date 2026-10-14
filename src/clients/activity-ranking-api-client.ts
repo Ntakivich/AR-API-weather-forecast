@@ -33,6 +33,11 @@ export class ActivityRankingApiClient {
     });
   }
 
+  /** Sends exactly the given parameters, for scenarios that probe missing or invalid input. */
+  searchLocationsWithParameters(queryParameters: Record<string, string>): Promise<ApiCallOutcome> {
+    return this.get(API_ENDPOINTS.locationSearch, queryParameters);
+  }
+
   getActivityRankingsForCity(cityName: string): Promise<ApiCallOutcome> {
     return this.get(API_ENDPOINTS.activityRankings, { city: cityName });
   }

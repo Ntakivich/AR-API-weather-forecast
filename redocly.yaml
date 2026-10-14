@@ -1,0 +1,8 @@
+extends:
+  - recommended
+
+rules:
+  # The local server URL is intentional: the suite targets a locally started service.
+  no-server-example.com: off
+  # /health is a liveness probe with no client input, so it has no 4xx response to document.
+  operation-4xx-response: off

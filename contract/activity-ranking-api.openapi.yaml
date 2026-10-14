@@ -1,0 +1,392 @@
+openapi: 3.1.0
+info:
+  title: Activity Ranking API
+  version: 1.0.0-draft
+  summary: Ranks outdoor and indoor activities for the next 7 days of a city's weather forecast.
+  description: |
+    Spec-first contract written by the test suite **before** any implementation exists.
+    Every assumption made here is listed in the README under "Assumptions to confirm".
+
+    Weather data is sourced from Open-Meteo (geocoding, forecast and marine APIs).
+    The service must read the Open-Meteo base URLs from configuration so that the test
+    suite can point it at a stub server:
+
+    - `OPEN_METEO_GEOCODING_URL` (default `https://geocoding-api.open-meteo.com`)
+    - `OPEN_METEO_FORECAST_URL` (default `https://api.open-meteo.com`)
+    - `OPEN_METEO_MARINE_URL` (default `https://marine-api.open-meteo.com`)
+  license:
+    name: MIT
+    identifier: MIT
+
+# Assumption: the API is public and unauthenticated (no API key or user session).
+security: []
+
+servers:
+  - url: http://localhost:3000
+    description: Local service (configurable through API_BASE_URL in the test suite)
+
+tags:
+  - name: Locations
+    description: Find a city or town from a full or partial name.
+  - name: Activity rankings
+    description: Daily activity rankings driven by the weather forecast.
+  - name: Operations
+    description: Service health.
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags: [Operations]
+      summary: Liveness check used by deployment tooling and the test-suite preflight.
+      responses:
+        '200':
+          description: The service is running.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /v1/locations:
+    get:
+      operationId: searchLocations
+      tags: [Locations]
+      summary: Search cities and towns by full or partial name (autocomplete).
+      description: |
+        Prefix matching is case-insensitive and diacritic-insensitive ("zur" matches "Zürich").
+        A query of exactly 2 characters only returns exact name matches (mirrors Open-Meteo).
+        No match is **not** an error: the response is `200` with an empty `matches` list so the
+        front end can render "No places found" without error handling.
+      parameters:
+        - $ref: '#/components/parameters/SearchQuery'
+        - $ref: '#/components/parameters/SearchResultLimit'
+      responses:
+        '200':
+          description: Matching locations ordered by relevance (most populous first).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationSearchResult'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '502':
+          $ref: '#/components/responses/WeatherProviderUnavailable'
+        '504':
+          $ref: '#/components/responses/WeatherProviderTimeout'
+
+  /v1/activity-rankings:
+    get:
+      operationId: getActivityRankings
+      tags: [Activity rankings]
+      summary: Rank Skiing, Surfing, Outdoor Sightseeing and Indoor Sightseeing for each of the next 7 days.
+      description: |
+        Provide **exactly one** of `city` or `locationId`.
+
+        - `city` must resolve to a single place. When several places share the name
+          (e.g. London, GB and London, CA) or the name is only a partial match, the API
+          responds `409` with the candidates so the front end can ask the user to choose,
+          then call again with `locationId`.
+        - `locationId` is the `id` returned by `/v1/locations` and is never ambiguous.
+
+        Within each day the four activities are ordered by `rank` (1 = most suitable).
+      parameters:
+        - $ref: '#/components/parameters/CityName'
+        - $ref: '#/components/parameters/LocationId'
+      responses:
+        '200':
+          description: 7 consecutive days, each with all four activities ranked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityRankingReport'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '404':
+          $ref: '#/components/responses/LocationNotFound'
+        '409':
+          $ref: '#/components/responses/AmbiguousLocation'
+        '502':
+          $ref: '#/components/responses/WeatherProviderUnavailable'
+        '504':
+          $ref: '#/components/responses/WeatherProviderTimeout'
+
+components:
+  parameters:
+    SearchQuery:
+      name: query
+      in: query
+      required: true
+      description: Full or partial city/town name. Leading and trailing whitespace is ignored.
+      schema:
+        type: string
+        minLength: 2
+        maxLength: 100
+      examples:
+        partialName:
+          value: Cham
+        nameWithDiacritics:
+          value: Zürich
+    SearchResultLimit:
+      name: limit
+      in: query
+      required: false
+      description: Maximum number of matches to return.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 20
+        default: 10
+    CityName:
+      name: city
+      in: query
+      required: false
+      description: Full city or town name. Mutually exclusive with `locationId`.
+      schema:
+        type: string
+        minLength: 2
+        maxLength: 100
+    LocationId:
+      name: locationId
+      in: query
+      required: false
+      description: Location identifier from `/v1/locations`. Mutually exclusive with `city`.
+      schema:
+        type: integer
+        minimum: 1
+
+  responses:
+    InvalidRequest:
+      description: The request parameters are missing, malformed or out of range.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/InvalidRequestProblem'
+    LocationNotFound:
+      description: No city or town matches the given name or identifier.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    AmbiguousLocation:
+      description: The city name does not identify a single place; the user must pick a candidate.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/AmbiguousLocationProblem'
+    WeatherProviderUnavailable:
+      description: Open-Meteo returned an error or an unreadable response.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    WeatherProviderTimeout:
+      description: Open-Meteo did not respond within the service's upstream timeout.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: ok
+
+    Location:
+      type: object
+      description: A city or town, with enough detail for the user to tell same-named places apart.
+      required: [id, name, country, countryCode, latitude, longitude, timezone]
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          description: Stable identifier (Open-Meteo / GeoNames id).
+        name:
+          type: string
+          minLength: 1
+        region:
+          type: string
+          description: First-level administrative area (state, province, county) when known.
+        country:
+          type: string
+          minLength: 1
+        countryCode:
+          type: string
+          pattern: '^[A-Z]{2}$'
+          description: ISO 3166-1 alpha-2 country code.
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        timezone:
+          type: string
+          minLength: 1
+          description: IANA time zone of the location; ranking dates are local to it.
+
+    LocationSearchResult:
+      type: object
+      required: [query, matches]
+      additionalProperties: false
+      properties:
+        query:
+          type: string
+          description: The normalised (trimmed) query that was searched.
+        matches:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/Location'
+
+    ActivityName:
+      type: string
+      enum: [Skiing, Surfing, Outdoor Sightseeing, Indoor Sightseeing]
+
+    SuitabilityRating:
+      type: string
+      description: |
+        Human-friendly band derived from `suitabilityScore`:
+        POOR 0-24, FAIR 25-49, GOOD 50-74, EXCELLENT 75-100.
+        UNAVAILABLE when the forecast lacks the data needed to assess the activity.
+      enum: [EXCELLENT, GOOD, FAIR, POOR, UNAVAILABLE]
+
+    ActivityAssessment:
+      type: object
+      required: [activity, rank, suitabilityScore, suitabilityRating, reasons]
+      additionalProperties: false
+      properties:
+        activity:
+          $ref: '#/components/schemas/ActivityName'
+        rank:
+          type: integer
+          minimum: 1
+          maximum: 4
+          description: 1 is the most suitable activity of the day. Ties are broken by the order of the activity enum.
+        suitabilityScore:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 100
+          description: 0 (unsuitable) to 100 (ideal). Null only when suitabilityRating is UNAVAILABLE.
+        suitabilityRating:
+          $ref: '#/components/schemas/SuitabilityRating'
+        reasons:
+          type: array
+          minItems: 1
+          description: Plain-language explanations with units, e.g. "High snowfall expected (30 cm)".
+          items:
+            type: string
+            minLength: 1
+
+    DailyActivityRanking:
+      type: object
+      required: [date, activities]
+      additionalProperties: false
+      properties:
+        date:
+          type: string
+          format: date
+          description: Calendar date local to the location's time zone.
+        activities:
+          type: array
+          minItems: 4
+          maxItems: 4
+          description: All four activities, ordered by rank.
+          items:
+            $ref: '#/components/schemas/ActivityAssessment'
+
+    MeasurementUnits:
+      type: object
+      required: [temperature, snowfall, precipitation, windSpeed, waveHeight]
+      additionalProperties: false
+      properties:
+        temperature:
+          type: string
+          const: °C
+        snowfall:
+          type: string
+          const: cm
+        precipitation:
+          type: string
+          const: mm
+        windSpeed:
+          type: string
+          const: km/h
+        waveHeight:
+          type: string
+          const: m
+
+    ActivityRankingReport:
+      type: object
+      required: [location, units, days]
+      additionalProperties: false
+      properties:
+        location:
+          $ref: '#/components/schemas/Location'
+        units:
+          $ref: '#/components/schemas/MeasurementUnits'
+        days:
+          type: array
+          minItems: 7
+          maxItems: 7
+          description: 7 consecutive days starting today in the location's time zone.
+          items:
+            $ref: '#/components/schemas/DailyActivityRanking'
+
+    Problem:
+      type: object
+      description: RFC 9457 problem details.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          enum:
+            - /problems/invalid-request
+            - /problems/location-not-found
+            - /problems/ambiguous-location
+            - /problems/weather-provider-unavailable
+            - /problems/weather-provider-timeout
+        title:
+          type: string
+          minLength: 1
+        status:
+          type: integer
+        detail:
+          type: string
+          description: Human-readable explanation safe to show to the end user.
+
+    InvalidRequestProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required: [invalidParams]
+          properties:
+            invalidParams:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                required: [name, reason]
+                properties:
+                  name:
+                    type: string
+                  reason:
+                    type: string
+
+    AmbiguousLocationProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required: [candidates]
+          properties:
+            candidates:
+              type: array
+              minItems: 1
+              items:
+                $ref: '#/components/schemas/Location'

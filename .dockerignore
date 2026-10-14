@@ -1,0 +1,9 @@
+node_modules
+.git
+.features-gen
+playwright-report
+test-results
+allure-results
+allure-report
+allure-history
+.env

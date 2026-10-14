@@ -1,0 +1,32 @@
+# One command runs the whole suite locally and in CI: `npm run test:docker`.
+name: activity-ranking-acceptance
+
+services:
+  weather-provider-stub:
+    image: wiremock/wiremock:3.13.2
+    command: ['--port', '8080', '--disable-banner']
+    ports:
+      - '8080:8080'
+
+  # Plug the Activity Ranking API in here once it exists. It must call the stub instead of Open-Meteo:
+  # activity-ranking-api:
+  #   image: activity-ranking-api:latest
+  #   environment:
+  #     OPEN_METEO_GEOCODING_URL: http://weather-provider-stub:8080
+  #     OPEN_METEO_FORECAST_URL: http://weather-provider-stub:8080
+  #     OPEN_METEO_MARINE_URL: http://weather-provider-stub:8080
+  #   depends_on:
+  #     - weather-provider-stub
+
+  acceptance-tests:
+    build: .
+    depends_on:
+      - weather-provider-stub
+    environment:
+      API_BASE_URL: ${API_BASE_URL:-http://activity-ranking-api:3000}
+      WEATHER_PROVIDER_STUB_URL: http://weather-provider-stub:8080
+      CI: ${CI:-false}
+    volumes:
+      - ./allure-results:/suite/allure-results
+      - ./playwright-report:/suite/playwright-report
+      - ./test-results:/suite/test-results

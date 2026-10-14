@@ -26,7 +26,8 @@ npm run report:allure && npm run report:allure:open
 npm run verify             # types, lint, formatting, OpenAPI lint, every Gherkin step bound
 ```
 
-Configuration lives in [.env.example](.env.example): `API_BASE_URL` and `WEATHER_PROVIDER_STUB_URL`.
+Configuration: copy [.env.example](.env.example) to `.env` (git-ignored, loaded automatically) or set
+`API_BASE_URL` and `WEATHER_PROVIDER_STUB_URL` in the environment, which takes precedence.
 
 ## Approach
 
@@ -230,8 +231,6 @@ can be revised after feedback.
   the questions above).
 - **Midnight edge case**: "today" is computed when the assertion runs, so a run that crosses midnight
   at the location could flake in the date scenarios.
-- **Docker** was not available on the authoring machine. The compose path was exercised by running
-  the container's entry command against a locally started WireMock; CI runs the real compose setup.
 
 ## CI/CD
 
@@ -242,8 +241,22 @@ can be revised after feedback.
 2. **Acceptance specification**: `npm run test:docker`, then an Allure report with run history and a
    job summary counting failures per category. The red result is allowed and flagged with a warning
    until the repository variable `ACCEPTANCE_SUITE_BLOCKS_BUILD=true` makes it a blocking check.
-3. **Publish**: the Allure report is deployed to GitHub Pages from `main`.
+3. **Publish**: reports are committed to the `gh-pages` branch: `main/` for the main branch and
+   `pr-<number>/` for each pull request, which also gets a single comment, updated on every run,
+   with the summary and a report link. A pull request's report starts from main's history, and
+   [remove-pull-request-report.yml](.github/workflows/remove-pull-request-report.yml) deletes it
+   when the pull request closes. Pull requests from forks keep the downloadable artifact only.
 4. **Live stub check** (manual): _Run workflow_ with _live-weather-provider_ ticked.
+
+**One-time setup** after the first run has created the `gh-pages` branch: _Settings → Pages →
+Build and deployment → Source: Deploy from a branch → `gh-pages` / `(root)`_. Reports are then served at
+`https://<owner>.github.io/<repository>/main/` and `…/pr-<number>/`.
+
+Secrets the service or suite may need later (API keys, tokens) go in _Settings → Secrets and
+variables → Actions_, never in the repository. The workflow passes them as environment variables
+(`env: API_KEY: ${{ secrets.API_KEY }}`), and `docker-compose.yml` forwards them into the containers
+(`API_KEY: ${API_KEY:-}`). Locally they live in a git-ignored `.env`; [.env.example](.env.example)
+lists the names without values.
 
 ## Project layout
 

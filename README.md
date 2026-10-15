@@ -296,10 +296,12 @@ each schema:
 - `minimum`/`maximum`, `minLength`/`maxLength`, `minItems`/`maxItems`: limits
 - `format: date`: ISO calendar date
 
-To browse it as documentation:
+To browse it as documentation, open [contract-docs.html](contract-docs.html) in a browser (download it
+from GitHub, which shows HTML as source). It is generated from the YAML; after changing the contract,
+regenerate it in the same commit:
 
 ```bash
-npx redocly build-docs contract/activity-ranking-api.openapi.yaml -o contract-docs.html   # then open the HTML
+npm run contract:docs
 ```
 
 **How the suite uses it:**

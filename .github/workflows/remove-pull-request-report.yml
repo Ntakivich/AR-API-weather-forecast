@@ -1,0 +1,22 @@
+name: Remove pull request report
+
+# Deletes <site>/pr-<number>/ from the gh-pages branch once the pull request is closed or merged.
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-allure-report
+  cancel-in-progress: false
+
+jobs:
+  remove-report:
+    name: Remove the published Allure report
+    if: ${{ !github.event.pull_request.head.repo.fork }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: scripts/ci/remove-report-from-gh-pages.sh "pr-${{ github.event.pull_request.number }}"

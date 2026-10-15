@@ -27,7 +27,8 @@
     "pairwise:generate": "tsx scripts/generate-pairwise-weather-days.ts",
     "test:in-container": "tsx scripts/wait-for-weather-provider-stub.ts && npm test",
     "pretest": "tsx scripts/clear-allure-results.ts",
-    "report:summary": "tsx scripts/summarise-acceptance-results.ts"
+    "report:summary": "tsx scripts/summarise-acceptance-results.ts",
+    "contract:docs": "redocly build-docs contract/activity-ranking-api.openapi.yaml --output contract-docs.html"
   },
   "devDependencies": {
     "@cucumber/gherkin": "39.1.0",

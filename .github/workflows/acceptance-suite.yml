@@ -18,6 +18,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PAGES_SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+
 jobs:
   static-checks:
     name: Types, lint, formatting, contract and step bindings
@@ -35,8 +38,8 @@ jobs:
     name: Acceptance specification
     needs: static-checks
     runs-on: ubuntu-latest
-    env:
-      PUBLISHED_REPORT_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+    outputs:
+      report-directory: ${{ steps.report-target.outputs.directory }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -45,6 +48,15 @@ jobs:
           cache: npm
       - run: npm ci
 
+      - name: Decide where the report is published
+        id: report-target
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "directory=pr-${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "directory=main" >> "$GITHUB_OUTPUT"
+          fi
+
       # Spec-first: the service does not exist yet, so a red suite is the expected outcome.
       # Set the repository variable ACCEPTANCE_SUITE_BLOCKS_BUILD=true once the service is plugged in.
       - name: Run the suite against the WireMock weather provider stub
@@ -52,24 +64,39 @@ jobs:
         continue-on-error: ${{ vars.ACCEPTANCE_SUITE_BLOCKS_BUILD != 'true' }}
         run: npm run test:docker
 
-      - name: Restore report history from the published report
+      # A pull request starts from main's history, so its report shows trends against main.
+      - name: Restore report history from the gh-pages branch
         if: always()
+        env:
+          REPORT_DIRECTORY: ${{ steps.report-target.outputs.directory }}
         run: |
           mkdir -p allure-history
-          curl --fail --silent --show-error --location \
-            "$PUBLISHED_REPORT_URL/history/history.jsonl" --output allure-history/history.jsonl \
-            || echo "No published history yet; starting a new one."
+          if git fetch --depth=1 origin gh-pages 2>/dev/null; then
+            git show "FETCH_HEAD:$REPORT_DIRECTORY/history/history.jsonl" > allure-history/history.jsonl 2>/dev/null \
+              || git show "FETCH_HEAD:main/history/history.jsonl" > allure-history/history.jsonl 2>/dev/null \
+              || echo "No history published yet; starting a new one."
+          else
+            echo "No gh-pages branch yet; starting a new history."
+          fi
 
       - name: Build the Allure report
         if: always()
+        env:
+          REPORT_NAME: >-
+            Activity Ranking API: ${{ github.event_name == 'pull_request'
+            && format('PR #{0}', github.event.pull_request.number) || 'main' }}
         run: |
-          npm run report:allure
+          npx allure generate allure-results --report-name "$REPORT_NAME"
           mkdir -p allure-report/history
           cp allure-history/history.jsonl allure-report/history/ 2>/dev/null || true
 
       - name: Summarise results
         if: always()
-        run: npm run --silent report:summary >> "$GITHUB_STEP_SUMMARY"
+        env:
+          REPORT_URL: ${{ env.PAGES_SITE_URL }}/${{ steps.report-target.outputs.directory }}/
+        run: |
+          npm run --silent report:summary > acceptance-summary.md
+          cat acceptance-summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Flag the expected red state
         if: steps.suite.outcome == 'failure'
@@ -77,7 +104,7 @@ jobs:
           echo "::warning title=Spec-first suite is red::Scenarios fail because the Activity Ranking API
           is not implemented yet. See the job summary and the Allure report for what each scenario expects."
 
-      - name: Upload the Allure and Playwright reports
+      - name: Upload the reports
         if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -85,28 +112,54 @@ jobs:
           path: |
             allure-report
             playwright-report
+            acceptance-summary.md
           retention-days: 14
 
-      - name: Prepare the Allure report for GitHub Pages
-        if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: allure-report
-
+  # Publishes main to <site>/main/ and each pull request to <site>/pr-<number>/ on the gh-pages
+  # branch. Pull requests from forks get a read-only token, so they keep only the artifact.
   publish-report:
-    name: Publish the Allure report to GitHub Pages
+    name: Publish the Allure report
     needs: acceptance
-    if: always() && needs.acceptance.result == 'success' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: >-
+      always() && needs.acceptance.result == 'success' && (
+        (github.event_name != 'pull_request' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)
+      )
     runs-on: ubuntu-latest
     permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: publish-allure-report
+      cancel-in-progress: false
+    env:
+      REPORT_DIRECTORY: ${{ needs.acceptance.outputs.report-directory }}
     steps:
-      - id: deployment
-        uses: actions/deploy-pages@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: acceptance-reports
+          path: reports
+
+      - name: Publish to the gh-pages branch
+        run: scripts/ci/publish-report-to-gh-pages.sh reports/allure-report "$REPORT_DIRECTORY"
+
+      - name: Comment on the pull request
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            cat reports/acceptance-summary.md
+            echo
+            echo "<sub>Updated for ${{ github.event.pull_request.head.sha }}. GitHub Pages may take a minute to refresh.</sub>"
+          } > pull-request-comment.md
+          gh pr comment "$PULL_REQUEST_NUMBER" --body-file pull-request-comment.md --edit-last --create-if-none
+
+      - name: Link the report in the job summary
+        run: |
+          echo "Allure report: $PAGES_SITE_URL/$REPORT_DIRECTORY/" >> "$GITHUB_STEP_SUMMARY"
 
   live-weather-provider:
     name: Stub fidelity against live Open-Meteo

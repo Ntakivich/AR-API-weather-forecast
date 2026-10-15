@@ -1,4 +1,12 @@
+import { existsSync } from 'node:fs';
+
+const LOCAL_ENVIRONMENT_FILE = '.env';
 const DEFAULT_API_BASE_URL = 'http://localhost:3000';
+
+// Local runs read an optional, git-ignored .env; variables already set (CI, Docker) take precedence.
+if (existsSync(LOCAL_ENVIRONMENT_FILE)) {
+  process.loadEnvFile(LOCAL_ENVIRONMENT_FILE);
+}
 const DEFAULT_WEATHER_PROVIDER_STUB_URL = 'http://localhost:8080';
 
 function readUrlVariable(variableName: string, defaultValue: string): string {

@@ -1,8 +1,0 @@
-{
-  "baseUrl": "http://activity-ranking-api:3000",
-  "method": "GET",
-  "path": "/v1/activity-rankings",
-  "queryParameters": {
-    "locationId": "1.5"
-  }
-}

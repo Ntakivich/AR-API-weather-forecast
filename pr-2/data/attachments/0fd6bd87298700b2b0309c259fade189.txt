@@ -1,6 +1,0 @@
-apiRequestContext.get: getaddrinfo EAI_AGAIN activity-ranking-api
-Call log:
-[2m  - → GET http://activity-ranking-api:3000/v1/locations?query=Lon[22m
-[2m    - user-agent: Playwright/1.64.1 (x64; debian 12) node/24.22 CI/1[22m
-[2m    - accept: application/json, application/problem+json[22m
-[2m    - accept-encoding: gzip,deflate,br[22m

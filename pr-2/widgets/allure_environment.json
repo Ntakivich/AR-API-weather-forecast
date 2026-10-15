@@ -1,1 +1,1 @@
-[{"name":"Activity Ranking API","values":["http://activity-ranking-api:3000"]},{"name":"Weather provider stub (WireMock)","values":["http://weather-provider-stub:8080"]},{"name":"Node.js","values":["v24.21.0"]}]
+[{"name":"Activity Ranking API","values":["http://activity-ranking-api:3000"]},{"name":"Weather provider stub (WireMock)","values":["http://weather-provider-stub:8080"]},{"name":"Node.js","values":["v24.22.0"]}]

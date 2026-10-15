@@ -9,7 +9,7 @@ scenario fails.
 > `Activity Ranking API is not reachable … the service is not implemented yet`. Each failure names
 > the request that was sent and the outcome the scenario expects.
 
-Please, check the report from CI to get more info about tests:  [Allure-report](https://ntakivich.github.io/AR-API-weather-forecast/main/)
+Please, check the report from CI to get more info about tests: [Allure-report](https://ntakivich.github.io/AR-API-weather-forecast/main/)
 
 Please, check the GitHub Actions pipeline output for additional info [actions](https://github.com/Ntakivich/AR-API-weather-forecast/actions/runs/38749671193)
 
